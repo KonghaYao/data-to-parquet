@@ -1,0 +1,7 @@
+src/data_to_parquet_bin/bin/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+
