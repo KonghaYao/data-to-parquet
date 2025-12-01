@@ -1,13 +1,15 @@
 #!/bin/bash
 
 # 脚本名称: build_all.sh
-# 功能: 跨平台构建 (macOS ARM64, Windows ARM64, Linux ARM64)
+# 功能: 跨平台构建 (macOS ARM64/Intel, Windows ARM64/x86, Linux ARM64/x86)
 #
 # 目标平台:
 # 1. aarch64-apple-darwin (macOS ARM64 / Apple Silicon) - 本机可以直接构建
 # 2. aarch64-pc-windows-msvc (Windows ARM64) - 注意：在非 Windows 上交叉编译 MSVC 非常困难
 #    通常建议改用 aarch64-pc-windows-gnu，或者需要在 macOS 上接受限制/跳过
 # 3. aarch64-unknown-linux-gnu (Linux ARM64) - 需要交叉编译工具链
+# 4. x86_64-unknown-linux-gnu (Linux x86_64) - 需要交叉编译工具链 (仅在非 Linux 平台)
+# 5. x86_64-pc-windows-msvc (Windows x86_64) - 需要 cargo-xwin 或 GNU 工具链
 
 set -e
 
@@ -97,6 +99,58 @@ else
     echo "  Please install: cargo install cargo-xwin"
     echo "  Alternatively, consider using 'aarch64-pc-windows-gnu' if MinGW supports it (experimental)."
     echo "Skipping Windows ARM64 build."
+fi
+
+# ==========================================
+# 4. Linux x86_64 (x86_64-unknown-linux-gnu)
+# ==========================================
+TARGET_LINUX_X86="x86_64-unknown-linux-gnu"
+echo ">>> Building for Linux x86_64 ($TARGET_LINUX_X86)..."
+
+if [[ "$HOST_TARGET" == "x86_64-unknown-linux-gnu" ]]; then
+    # 本机就是目标平台
+    cargo build --release
+    cp "target/release/$APP_NAME" "$OUTPUT_DIR/$APP_NAME-linux-x86_64"
+else
+    # 交叉编译到 Linux x86_64
+    if ! rustup target list --installed | grep -q "$TARGET_LINUX_X86"; then
+        echo "Installing target $TARGET_LINUX_X86..."
+        rustup target add "$TARGET_LINUX_X86"
+    fi
+
+    # 检查 Linker: x86_64-unknown-linux-gnu-gcc
+    # macOS 安装: brew tap messense/macos-cross-toolchains && brew install x86_64-unknown-linux-gnu
+    if command -v x86_64-unknown-linux-gnu-gcc &> /dev/null; then
+        export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-unknown-linux-gnu-gcc
+
+        cargo build --release --target "$TARGET_LINUX_X86"
+        cp "target/$TARGET_LINUX_X86/release/$APP_NAME" "$OUTPUT_DIR/$APP_NAME-linux-x86_64"
+    else
+        echo "Warning: Linker 'x86_64-unknown-linux-gnu-gcc' not found. Skipping Linux x86_64 build."
+        echo "  To install on macOS: brew tap messense/macos-cross-toolchains && brew install x86_64-unknown-linux-gnu"
+    fi
+fi
+
+# ==========================================
+# 5. Windows x86_64 (x86_64-pc-windows-msvc)
+# ==========================================
+TARGET_WIN_X86="x86_64-pc-windows-msvc"
+echo ">>> Building for Windows x86_64 ($TARGET_WIN_X86)..."
+
+if ! rustup target list --installed | grep -q "$TARGET_WIN_X86"; then
+    echo "Installing target $TARGET_WIN_X86..."
+    rustup target add "$TARGET_WIN_X86"
+fi
+
+if command -v cargo-xwin &> /dev/null; then
+    echo "Found cargo-xwin, attempting build..."
+    cargo xwin build --release --target "$TARGET_WIN_X86"
+    cp "target/$TARGET_WIN_X86/release/$APP_NAME.exe" "$OUTPUT_DIR/$APP_NAME-windows-x86_64.exe"
+else
+    echo "Warning: Cross-compiling to MSVC ($TARGET_WIN_X86) on non-Windows requires 'cargo-xwin'."
+    echo "  Please install: cargo install cargo-xwin"
+    echo "  Alternatively, consider using 'x86_64-pc-windows-gnu' if MinGW is available."
+    echo "Skipping Windows x86_64 build."
 fi
 
 echo "----------------------------------------"

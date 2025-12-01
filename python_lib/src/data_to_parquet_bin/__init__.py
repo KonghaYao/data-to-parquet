@@ -28,18 +28,23 @@ def _get_binary_path() -> Path:
     if system == "darwin":
         if machine == "arm64":
             binary_name = "data-to-parquet-macos-arm64"
+        elif machine == "x86_64":
+            # For now, fallback to ARM64 binary (Rosetta 2 compatibility)
+            binary_name = "data-to-parquet-macos-arm64"
         else:
-            # Fallback or error for x86_64 mac if not provided
-            binary_name = "data-to-parquet-macos-arm64"  # Assuming Rosetta works or only ARM64 provided
+            raise DataToParquetError(f"Unsupported architecture: {machine} on {system}")
     elif system == "linux":
         if machine == "aarch64":
             binary_name = "data-to-parquet-linux-arm64"
+        elif machine == "x86_64":
+            binary_name = "data-to-parquet-linux-x86_64"
         else:
-            # Fallback for x86_64 linux if needed, but user asked for specific targets
             raise DataToParquetError(f"Unsupported architecture: {machine} on {system}")
     elif system == "windows":
         if machine == "aarch64" or machine == "arm64":  # Windows might report arm64
             binary_name = "data-to-parquet-windows-arm64.exe"
+        elif machine == "x86_64" or machine == "amd64":
+            binary_name = "data-to-parquet-windows-x86_64.exe"
         else:
             raise DataToParquetError(f"Unsupported architecture: {machine} on {system}")
     else:
